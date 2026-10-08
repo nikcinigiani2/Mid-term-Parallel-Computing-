@@ -2,9 +2,10 @@
 #include <fstream>
 #include <vector>
 #include <string>
-#include <unistd.h> // per la funzione crypt() su sistemi Unix/macOS
+#include <chrono> // Per i timer ad alta risoluzione
+#include <unistd.h>
+#include "decryptSequential.h"
 
-//carica il file di testo in memoria (nel ector)
 std::vector<std::string> loadDictionary(const std::string& filename) {
     std::vector<std::string> dict;
     std::ifstream file(filename);
@@ -22,59 +23,49 @@ std::vector<std::string> loadDictionary(const std::string& filename) {
     return dict;
 }
 
-// Funzione core per la ricerca sequenziale
-// Restituisce la posizione (1-based) se trova la password, altrimenti -1
-int checkPwd(const std::string& crypted_password, const std::string& salt, const std::vector<std::string>& passwordList) {
-    int pos = 1;
-    for (const auto& word : passwordList) {
-        // Cifra la parola corrente usando l'algoritmo DES (tramite crypt)
-        char* hashed_word_ptr = crypt(word.c_str(), salt.c_str());
-
-        if (hashed_word_ptr != nullptr) {
-            std::string hashed_word(hashed_word_ptr);
-
-            // Se l'hash coincide con quello cercato, esci dal ciclo (early termination)
-            if (hashed_word == crypted_password) {
-                return pos;
-            }
-        }
-        pos++;
-    }
-    return -1; // Password non trovata
-}
-
 int main() {
-    std::cout << "--- Avvio DecryptionPassword (Sequenziale Baseline) ---" << std::endl;
+    std::cout << "--- Avvio DecryptionPassword (Benchmarking Sequenziale) ---" << std::endl;
 
-    // 1. Carica il dizionario fittizio
-    std::string dict_path = "../data/dummy_dict.txt"; // Aggiusta il path se necessario in CLion
+    // 1. Caricamento del dataset pulito (Escluso dal timer delle performance)
+    std::string dict_path = "data/rockyou_clean.txt";
+    std::cout << "Caricamento dizionario in corso..." << std::endl;
     std::vector<std::string> passwordList = loadDictionary(dict_path);
 
     if (passwordList.empty()) {
-        return 1; // Termina se il dizionario è vuoto o non trovato
+        return 1;
     }
     std::cout << "Dizionario caricato con " << passwordList.size() << " password." << std::endl;
 
-    // 2. Setup del test
-    // Immaginiamo di voler cercare la password "password" il cui salt è "ab"
-    std::string target_plain = "password";
+    // 2. Setup del target di test
+    // Prendiamo una password situata a metà del dataset per avere un tempo di ricerca significativo
+    int target_index = passwordList.size() / 2;
+    std::string target_plain = passwordList[target_index];
     std::string salt = "ab";
-
-    // Generiamo l'hash target direttamente per il test (in un caso reale questo ci viene fornito)
     std::string target_hash = crypt(target_plain.c_str(), salt.c_str());
-    std::cout << "Target Hash generato (per '" << target_plain << "'): " << target_hash << std::endl;
 
-    // 3. Esecuzione della ricerca
-    std::cout << "Ricerca in corso..." << std::endl;
-    int position = checkPwd(target_hash, salt, passwordList);
+    std::cout << "Target Hash generato (per la password all'indice " << target_index << "): " << target_hash << std::endl;
 
-    // 4. Risultato
+    // 3. Esecuzione e Misurazione del Tempo
+    std::cout << "Ricerca sequenziale in corso..." << std::endl;
+
+    // Inizio timer
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    int position = checkPwdSequential(target_hash, salt, passwordList);
+
+    // Fine timer
+    auto end_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> execution_time = end_time - start_time;
+
+    // 4. Stampa dei Risultati
     if (position != -1) {
-        std::cout << "SUCCESS! Password trovata alla riga: " << position << std::endl;
+        std::cout << "\nSUCCESS! Password trovata alla riga: " << position << std::endl;
         std::cout << "La password in chiaro e': " << passwordList[position - 1] << std::endl;
     } else {
-        std::cout << "FAILED! Password non trovata nel dizionario." << std::endl;
+        std::cout << "\nFAILED! Password non trovata." << std::endl;
     }
+
+    std::cout << "Tempo di esecuzione sequenziale: " << execution_time.count() << " secondi." << std::endl;
 
     return 0;
 }
