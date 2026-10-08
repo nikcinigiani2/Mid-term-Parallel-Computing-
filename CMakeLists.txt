@@ -6,5 +6,6 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(OpenMP REQUIRED)
 
 add_executable(DecryptionPassword main.cpp)
+add_executable(Preprocess preprocess.cpp)
 
 target_link_libraries(DecryptionPassword PRIVATE OpenMP::OpenMP_CXX)
